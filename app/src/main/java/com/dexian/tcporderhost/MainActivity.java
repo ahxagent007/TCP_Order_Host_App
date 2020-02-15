@@ -4,42 +4,56 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.app.Dialog;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.gson.Gson;
 
-import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity {
 
-    String IP = "192.168.0.103";
+    String IP = "192.168.0.102";
     int PORT = 6969;
 
     private Timer timer;
-    infoData infoData;
+    InfoData infoData;
 
-    Button btn_addItem;
+    Button btn_addItem, btn_settings;
+    ListView LV_itemList, LV_orderQueue;
+
+    CustomAdapterItemList customAdapterItemList;
+    CustomAdapterOrderList customAdapterOrderList;
+
+    Gson gson;
+    Thread thread;
+
+
+    List<ItemList> HOST_ITEM_LIST = new ArrayList<ItemList>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,9 +62,14 @@ public class MainActivity extends AppCompatActivity {
 
 
         btn_addItem = findViewById(R.id.btn_addItem);
+        LV_itemList = findViewById(R.id.LV_itemList);
+        LV_orderQueue = findViewById(R.id.LV_orderQueue);
+        btn_settings = findViewById(R.id.btn_settings);
+
+        infoData = new InfoData();
 
         // Create a new instance of Gson
-        final Gson gson = new Gson();
+        gson = new Gson();
 
         timer = new Timer();
         //Set the schedule function and rate
@@ -58,33 +77,164 @@ public class MainActivity extends AppCompatActivity {
 
                               @Override
                               public void run() {
-                                  String infoDataJson = gson.toJson(infoData);
 
-                                  //BackgroundTask backgroundTask = new BackgroundTask();
-                                  //backgroundTask.execute("Sending Data");
-
-                                  new Handler(Looper.getMainLooper()).post(new Runnable() {
-                                      @Override
-                                      public void run() {
-                                          //adapter.notifyDataSetChanged();
-                                      }
-                                  });
+                                  syncData();
 
 
-                                  Log.i("XIAN", "sampleJson = " + infoDataJson);
                               }
 
                           },
         //Set how long before to start calling the TimerTask (in milliseconds)
         0,
         //Set the amount of time between each execution (in milliseconds)
-        5000);
+        10000);
 
-        /*
+
         //Start Server
-        Thread thread = new Thread(new PersonalServer());
+        thread = new Thread(new PersonalServer());
         thread.start();
-        */
+
+
+
+
+        customAdapterItemList = new CustomAdapterItemList(getApplicationContext(), infoData.getItemList());
+        LV_itemList.setAdapter(customAdapterItemList);
+
+        customAdapterOrderList = new CustomAdapterOrderList(getApplicationContext(), infoData.getOrderList());
+        LV_orderQueue.setAdapter(customAdapterOrderList);
+
+
+        btn_addItem.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+                // custom dialog
+                final Dialog dialog = new Dialog(MainActivity.this);
+                dialog.setContentView(R.layout.add_item_custom);
+                //dialog.setTitle("Title...");
+
+                // set the custom dialog components - text, image and button
+                final EditText ET_itemName = dialog.findViewById(R.id.ET_itemName);
+                final EditText ET_itemPrice = dialog.findViewById(R.id.ET_itemPrice);
+                Button btn_addItem = dialog.findViewById(R.id.btn_addItem);
+
+                // if button is clicked, close the custom dialog
+                btn_addItem.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+
+                        if(!ET_itemName.getText().toString().equals("") && !ET_itemPrice.getText().toString().equals("")){
+
+                            int price = Integer.parseInt(ET_itemPrice.getText().toString());
+                            String name = ET_itemName.getText().toString();
+
+                            //infoData.getItemList().add(new ItemList(name, price));
+                            infoData.AddItem(name, price);
+
+                            Toast.makeText(getApplicationContext(), "Item Added", Toast.LENGTH_LONG).show();
+
+                            HOST_ITEM_LIST = infoData.getItemList();
+
+                            syncData();
+                            dialog.dismiss();
+
+                        }else{
+                            Toast.makeText(getApplicationContext(), "Quantity or Name missing", Toast.LENGTH_LONG).show();
+                        }
+
+                    }
+                });
+
+
+                dialog.setCancelable(true);
+                dialog.getWindow().setLayout(((getWidth(getApplicationContext()) / 100) * 90), ((getHeight(getApplicationContext()) / 100) * 50));
+                dialog.getWindow().setGravity(Gravity.CENTER);
+                dialog.show();
+
+
+            }
+        });
+
+        btn_settings.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                // custom dialog
+                final Dialog dialog = new Dialog(MainActivity.this);
+                dialog.setContentView(R.layout.setting_dialog);
+                //dialog.setTitle("Title...");
+
+                // set the custom dialog components - text, image and button
+                final EditText ET_IP = dialog.findViewById(R.id.ET_IP);
+                Button btn_save = dialog.findViewById(R.id.btn_save);
+
+                ET_IP.setText(getIP());
+
+
+                // if button is clicked, close the custom dialog
+                btn_save.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+
+                        if(!ET_IP.getText().toString().equals("")){
+
+                            IP = ET_IP.getText().toString();
+
+                            setIP(IP);
+
+                            dialog.dismiss();
+
+                        }else{
+                            Toast.makeText(getApplicationContext(), "IP missing", Toast.LENGTH_LONG).show();
+                        }
+
+
+
+                    }
+                });
+
+
+                dialog.setCancelable(true);
+                dialog.getWindow().setLayout(((getWidth(getApplicationContext()) / 100) * 90), ((getHeight(getApplicationContext()) / 100) * 50));
+                dialog.getWindow().setGravity(Gravity.CENTER);
+
+                dialog.show();
+
+
+            }
+        });
+
+
+
+    }
+
+    private void syncData(){
+        String infoDataJson = gson.toJson(infoData);
+
+        BackgroundTask backgroundTask = new BackgroundTask();
+        backgroundTask.execute(infoDataJson);
+
+        Log.i("XIAN", "infoDataJson = " + infoDataJson);
+
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+
+                //customAdapterItemList.notifyDataSetChanged();
+                //customAdapterOrderList.notifyDataSetChanged();
+
+                try{
+                    customAdapterItemList = new CustomAdapterItemList(getApplicationContext(), infoData.getItemList());
+                    LV_itemList.setAdapter(customAdapterItemList);
+                    customAdapterOrderList = new CustomAdapterOrderList(getApplicationContext(), infoData.getOrderList());
+                    LV_orderQueue.setAdapter(customAdapterOrderList);
+
+                }catch (Exception e){
+                    Log.i("XIAN", "ERROR syncData : "+e);
+                }
+
+
+            }
+        });
 
     }
 
@@ -93,6 +243,22 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
 
         timer.cancel();
+    }
+
+
+
+    public static int getWidth(Context context) {
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        WindowManager windowmanager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        windowmanager.getDefaultDisplay().getMetrics(displayMetrics);
+        return displayMetrics.widthPixels;
+    }
+
+    public static int getHeight(Context context) {
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        WindowManager windowmanager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        windowmanager.getDefaultDisplay().getMetrics(displayMetrics);
+        return displayMetrics.heightPixels;
     }
 
     class BackgroundTask extends AsyncTask<String, Void, String> {
@@ -152,12 +318,20 @@ public class MainActivity extends AppCompatActivity {
                         }
                     });*/
 
-                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                    /*new Handler(Looper.getMainLooper()).post(new Runnable() {
                         @Override
                         public void run() {
                             Toast.makeText(getApplicationContext(), data, Toast.LENGTH_LONG).show();
                         }
-                    });
+                    });*/
+
+                    infoData = gson.fromJson(data, InfoData.class);
+
+                    Log.i("XIAN", "HOST INFODATA RECEIVE : "+data);
+
+                    infoData.setItemList(HOST_ITEM_LIST);
+
+
 
 
 
@@ -207,12 +381,13 @@ public class MainActivity extends AppCompatActivity {
             btn_delete = view.findViewById(R.id.btn_delete);
 
             TV_itemName.setText(itemList.get(position).getItemName());
-            TV_itemPrice.setText(""+itemList.get(position).getItemPrice());
+            TV_itemPrice.setText("TK "+itemList.get(position).getItemPrice());
 
             btn_delete.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-
+                    infoData.getItemList().remove(position);
+                    syncData();
                 }
             });
 
@@ -224,7 +399,7 @@ public class MainActivity extends AppCompatActivity {
         private Context context;
         private List<OrderList> orderLists;
 
-        private TextView TV_itemName, TV_Quantity, TV_tableNo;
+        private TextView TV_itemName, TV_orderQuantity, TV_tableNo;
 
         public CustomAdapterOrderList(Context context, List<OrderList> orderLists) {
             this.context = context;
@@ -244,19 +419,35 @@ public class MainActivity extends AppCompatActivity {
         }
         @Override
         public View getView(final int position, View view, ViewGroup parent) {
-            view = LayoutInflater.from(context).inflate(R.layout.single_item_list, parent, false);
+            view = LayoutInflater.from(context).inflate(R.layout.single_order, parent, false);
 
             //add data to UI
             TV_itemName = view.findViewById(R.id.TV_itemName);
-            TV_Quantity = view.findViewById(R.id.TV_Quantity);
+            TV_orderQuantity = view.findViewById(R.id.TV_orderQuantity);
             TV_tableNo = view.findViewById(R.id.TV_tableNo);
 
             TV_itemName.setText(orderLists.get(position).getItemName());
-            TV_Quantity.setText(""+orderLists.get(position).getItemQuantity());
-            TV_tableNo.setText(""+orderLists.get(position).getTableNo());
+            TV_orderQuantity.setText(orderLists.get(position).getItemQuantity()+"x");
+            TV_tableNo.setText("Table#"+orderLists.get(position).getTableNo());
 
             return view;
         }
+    }
+
+
+    private void setIP(String ip){
+        SharedPreferences mSharedPreferences = getSharedPreferences("DATA", MODE_PRIVATE);
+        SharedPreferences.Editor mEditor = mSharedPreferences.edit();
+        mEditor.putString("IP",ip);
+
+        mEditor.apply();
+    }
+
+    private String getIP(){
+        SharedPreferences mSharedPreferences = getSharedPreferences("DATA", MODE_PRIVATE);
+        String ip = mSharedPreferences.getString("IP","192.168.0.102");
+
+        return ip;
     }
 
 }

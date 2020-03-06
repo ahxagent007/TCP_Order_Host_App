@@ -37,7 +37,7 @@ import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity {
 
-    String IP = "192.168.0.102";
+    String IP = "192.168.0.104";
     int PORT = 6969;
 
     private Timer timer;
@@ -212,6 +212,7 @@ public class MainActivity extends AppCompatActivity {
 
         BackgroundTask backgroundTask = new BackgroundTask();
         backgroundTask.execute(infoDataJson);
+        IP = getIP();
 
         Log.i("XIAN", "infoDataJson = " + infoDataJson);
 
@@ -324,17 +325,11 @@ public class MainActivity extends AppCompatActivity {
                             Toast.makeText(getApplicationContext(), data, Toast.LENGTH_LONG).show();
                         }
                     });*/
-
-                    infoData = gson.fromJson(data, InfoData.class);
-
                     Log.i("XIAN", "HOST INFODATA RECEIVE : "+data);
 
+
+                    infoData = gson.fromJson(data, InfoData.class);
                     infoData.setItemList(HOST_ITEM_LIST);
-
-
-
-
-
                 }
 
 

@@ -10,7 +10,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Set Manager App IP Address"
+        android:text="Set Customer App IP Address"
         android:textSize="20dp"
         android:textColor="#000000"
         android:gravity="center"/>
